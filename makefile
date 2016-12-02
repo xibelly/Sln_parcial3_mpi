@@ -15,6 +15,10 @@ read:
 main_program:
 	echo Estoy compilando $@.c
 	$(CC) $(CFLAGS) $@.c -o $@.o
+	$(CC) $@.o $(LFLAGS) -lm -lgsl -lgslcblas -o  $@.x
+main_program_modojc:
+	echo Estoy compilando $@.c
+	$(CC) $(CFLAGS) $@.c -o $@.o
 	$(CC) $@.o $(LFLAGS) -lm -lgsl -lgslcblas -o  $@.x		
 
 debug: 
