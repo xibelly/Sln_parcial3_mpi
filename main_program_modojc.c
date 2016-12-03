@@ -46,6 +46,7 @@ las particulas.
 #include<stdlib.h>
 #include<math.h>
 #include<mpi.h>
+#include<time.h>
 
 #define G 1
 
@@ -56,9 +57,12 @@ int Number_of_process;
 int Npart;
 int Parts_domain;
 int local_parts;
+clock_t tini, tend, tacum;
+double cpu_time_used;
 
 FILE *out1 = NULL;
 FILE *out2 = NULL;
+FILE *write = NULL;
 
 //Estructuras
 
@@ -135,7 +139,7 @@ int main(int argc, char **argv)
   if(argc != 3)
     {
       printf("ERROR--> use as:\n");
-      printf("%s FILE NUMBER_OF_PARTCLES \n",argv[0]);
+      printf("mpiexec -n Number_process %s FILE NUMBER_OF_PARTCLES \n",argv[0]);
       exit(0);  
     }
 
@@ -198,6 +202,9 @@ int main(int argc, char **argv)
 
       sprintf(buff,"forces_task%d_Nparts%d.dat",task,Npart);
       out2 = fopen(buff,"w");
+
+      tini = clock();
+      
       for(i=0; i<Parts_domain; i++)
 	{
 	  //printf("%lf %lf %lf %lf\n",Part_local0[i].x,Part_local0[i].y,Part_local0[i].z,Part_local0[i].m);
@@ -228,10 +235,19 @@ int main(int argc, char **argv)
 		}
 	    }
 	}
-
+      tend = clock();
       
       printf("DATA HAS BEEN READING\n");
       printf("task %d HAS BEEN CALCULATED ITS INTERNAL FORCES\n",task);
+
+      cpu_time_used = ((double) (tend - tini)) / CLOCKS_PER_SEC;
+  
+      printf("CPU TIME USED TO CALCULATE THE FORCE BY taks %d IS: %g\n",task,cpu_time_used);
+
+      sprintf(buff,"execution_time_task%d_Nparts%d",task,Parts_domain);
+      write = fopen(buff,"w");
+
+      fprintf(write,"%lf %d %d",cpu_time_used,task,Number_of_process);
       
     }//close task0
 
@@ -409,7 +425,7 @@ int main(int argc, char **argv)
 	    } 
 	  
 	}
-
+      tini = clock();
       for(i=1; i<Number_of_process; i++)
 	{
 	  
@@ -455,6 +471,17 @@ int main(int argc, char **argv)
 	}
 
       printf("task %d HAS BEEN CALCULATED ITS INTERNAL FORCES\n",task);
+
+      tend = clock();
+      
+      cpu_time_used = ((double) (tend - tini)) / CLOCKS_PER_SEC;
+  
+      printf("CPU TIME USED TO CALCULATE THE FORCE BY task %d IS: %g\n",task,cpu_time_used);
+
+      sprintf(buff,"execution_time_task%d_Nparts%d",task,local_parts);
+      write = fopen(buff,"w");
+
+      fprintf(write,"%lf %d %d",cpu_time_used,task,Number_of_process);
 
     }//close task!=0
 

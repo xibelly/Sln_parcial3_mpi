@@ -1,6 +1,6 @@
 CC = mpicc
 
-CFLAGS = -c -I/home/$(USER)/local/include/ -I/usr/include/
+CFLAGS = -c -O2 -I/home/$(USER)/local/include/ -I/usr/include/
 
 CFLAGSDEBUG = -g -Wall -c -I/home/$(USER)/local/include/ -I/usr/include/
 
@@ -12,7 +12,7 @@ read:
 	$(CC) $(CFLAGS) $@.c -o $@.o
 	$(CC) $@.o $(LFLAGS) -lm -lgsl -lgslcblas -o  $@.x	
 
-main_program:
+main_program_modojc_serie:
 	echo Estoy compilando $@.c
 	$(CC) $(CFLAGS) $@.c -o $@.o
 	$(CC) $@.o $(LFLAGS) -lm -lgsl -lgslcblas -o  $@.x
