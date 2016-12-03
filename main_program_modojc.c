@@ -73,18 +73,6 @@ struct particles
 };  
 struct particles *Part_temp, *Part_recv,*Part_local0,*Part_local;
 
-/*struct particles2   
-{
-  double *x;           //coordenadas particulas/
-  double *y;
-  double *z;
-  double *m;           //masa particulas/
-
-  double *Fx, *Fy, *Fz; //Conponentes de la fuerza//
-
-};
-struct particles2 *Part_local;*/
-
 struct DATA
 {
   double *x;           /*coordenadas particulas*/
@@ -98,22 +86,8 @@ struct DATA data;
 
 //Sub-rutinas
 
-//funcion que calcula la distancia entre las particulas
-double distance(double xi, double yi, double zi, double xj, double yj, double zj)
-{
-
-  double dist, dx, dy, dz;
-  
-  dx = (xi-xj)*(xi-xj);
-  dy = (yi-yj)*(yi-yj);
-  dz = (zi-zj)*(zi-zj);
-  
-  dist = sqrt(dx + dy + dz); 
-  
-  return dist;
-
-}
-
+#include "distancia.c"
+#include "fuerza.c"
 
 /*----------------------------------------------------------------PROGRAMA PRINCIPAL*/
 
@@ -130,8 +104,7 @@ int main(int argc, char **argv)
   int task;
   int tag1 = 1;
   int tag2 = 2;
-  int X=0, Y=1, Z=2, M=3;
-  
+    
   int Residuo;
   int Domain_size;
   double recvbuf=0.0;
@@ -174,10 +147,7 @@ int main(int argc, char **argv)
   Parts_domain = (int) ceil((1.0*Npart) /Number_of_process);
   Residuo = Npart % Number_of_process;
 
-  //MPI_Type_vector(Number_of_process,Parts_domain,Parts_domain,MPI_DOUBLE,&matrix_type);
-  //MPI_Type_commit(&matrix_type);
     
-  
   if(Npart < 0)
     printf("ERROR: NO PARTICLES\n");
 
@@ -187,11 +157,7 @@ int main(int argc, char **argv)
   data.m = (double *) malloc(Npart *sizeof(double));
   data.id = (int *) malloc(Npart *sizeof(int));
 
-  
-  //Part_local = (struct particles2 *) malloc( Number_of_process *sizeof(struct particles2));  /*Local Particles*/
    
-
-  
   if(task == 0)
     {
       printf("NUMBER OF TOTAL PARTICLES IS=%d\n",  Npart);
@@ -205,19 +171,9 @@ int main(int argc, char **argv)
   MPI_Barrier(MPI_COMM_WORLD);
 
 
-    if(task == 0)
-    {
-      printf("INITIALIZING THE DOMAIN DESCOMPOSITION \n");
-      
-      printf("----------------------------------------------------------------------------\n");
-    }
-
-  MPI_Barrier(MPI_COMM_WORLD);
-
-
   if(task == 0)
     {
-      printf("INITIALIZING THE DOMAIN DESCOMPOSITION \n");
+      printf("READING FILE... \n");
       
       read = fopen(file,"r");
 
@@ -240,7 +196,7 @@ int main(int argc, char **argv)
 	  //printf("%lf %lf %lf %lf\n",Part_local[task].x[i],Part_local[task].y[i],Part_local[task].z[i],Part_local[task].m [i]);
 	}
 
-      sprintf(buff,"forces_task%d_Npart%d.dat",task,Npart);
+      sprintf(buff,"forces_task%d_Nparts%d.dat",task,Npart);
       out2 = fopen(buff,"w");
       for(i=0; i<Parts_domain; i++)
 	{
@@ -262,21 +218,33 @@ int main(int argc, char **argv)
 		  
 		  dist = distance(xi,yi,zi,xj,yj,zj);
 	      
-		  Part_local0[i].Fx += -(G * mi *mj* (xi-xj) )/(dist*dist*dist);
+		  Part_local0[i].Fx += fuerza(G, mi,mj, xi, xj,dist);//-(G * mi *mj* (xi-xj) )/(dist*dist*dist);
 		  
-		  Part_local0[i].Fy += -(G * mi *mj* (yi-yj) )/(dist*dist*dist);
+		  Part_local0[i].Fy += fuerza(G, mi,mj, yi, yj,dist);//-(G * mi *mj* (yi-yj) )/(dist*dist*dist);
 		  
-		  Part_local0[i].Fz += -(G * mi *mj* (zi-zj) )/(dist*dist*dist);			  
+		  Part_local0[i].Fz += fuerza(G, mi,mj, zi, zj,dist);//-(G * mi *mj* (zi-zj) )/(dist*dist*dist);			  
 		  
-		  fprintf(out2,"%lf %e %e %e\n",dist,Part_local0[i].Fx,Part_local0[i].Fy,Part_local0[i].Fz);
+		  fprintf(out2,"%lf %e %e %e %e %e %e \n",dist,xi,yi,zi,Part_local0[i].Fx,Part_local0[i].Fy,Part_local0[i].Fz);
 		}
 	    }
 	}
+
+      
+      printf("DATA HAS BEEN READING\n");
+      printf("task %d HAS BEEN CALCULATED ITS INTERNAL FORCES\n",task);
       
     }//close task0
 
   MPI_Barrier(MPI_COMM_WORLD);
+  
+  if(task == 0)
+    {
+      printf("INITIALIZING THE DOMAIN DESCOMPOSITION \n");
+      
+      printf("----------------------------------------------------------------------------\n");
+    }
 
+  MPI_Barrier(MPI_COMM_WORLD);
   
   if(task == 0)
     {
@@ -387,6 +355,7 @@ int main(int argc, char **argv)
     {
       MPI_Recv(&local_parts, 1, MPI_INT, 0, tag1, MPI_COMM_WORLD, &status);
       printf("Sent value from task %d to task %d is %d\n", 0, task, local_parts);
+      printf("Size domain in bits is: %lu\n",sizeof(local_parts)*sizeof(struct particles));
       fflush(stdout);
  
       Part_recv = (struct particles *) malloc(local_parts *sizeof(struct particles)); 
@@ -469,13 +438,13 @@ int main(int argc, char **argv)
 			  			  
 			  dist =distance(xi,yi,zi,xj,yj,zj);
 			  
-			  Part_local[ii].Fx += -(G * mi *mj* (xi-xj) )/(dist*dist*dist);
+			  Part_local[ii].Fx += fuerza(G, mi,mj, xi, xj,dist);//-(G * mi *mj* (xi-xj) )/(dist*dist*dist);
 			  
-			  Part_local[ii].Fy += -(G * mi *mj* (yi-yj) )/(dist*dist*dist);
+			  Part_local[ii].Fy += fuerza(G, mi,mj, yi, yj,dist);//-(G * mi *mj* (yi-yj) )/(dist*dist*dist);
 			  
-			  Part_local[ii].Fz += -(G * mi *mj* (zi-zj) )/(dist*dist*dist);			  
+			  Part_local[ii].Fz += fuerza(G, mi,mj, zi, zj,dist);//-(G * mi *mj* (zi-zj) )/(dist*dist*dist);			  
 		  
-			  fprintf(out2,"%lf %e %e %e\n",dist,Part_local[ii].Fx,Part_local[ii].Fy,Part_local[ii].Fz);
+			  fprintf(out2,"%lf %e %e %e %e %e %e\n",dist,xi,yi,zi,Part_local[ii].Fx,Part_local[ii].Fy,Part_local[ii].Fz);
 			  //printf("%lf %lf %lf %lf %lf %lf %lf %lf %lf %d\n",dist,xi,yi,zi,xj,yj,zj,mi,mj,task);
 			}
 		    }
@@ -484,56 +453,24 @@ int main(int argc, char **argv)
 	      
 	    }
 	}
-      
+
+      printf("task %d HAS BEEN CALCULATED ITS INTERNAL FORCES\n",task);
 
     }//close task!=0
 
   
   //------------------------------------------------------------------------CALCULO DE FUERZAS EN CADA GRUPO
 
-   //Calculo campo de fuerza entre parts de un mismo dominio
+  if(task == (Number_of_process- 1))
+    {
+      printf("Data is going to rotate between the tasks\n");
+      printf("----------------------------------------------------------------------------\n");
+    }
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  int left = (task - 1 + Number_of_process) % Number_of_process;
+  int right = (task + 1) % Number_of_process;
 
-  /*for(i=0; i<Number_of_process; i++)
-    if(task = i)
-      {
-	if(task == 0)//fuerzas task0
-	  {
-	    for(ii=istar; ii<Parts_domain; ii++)
-	      {
-		printf("%lf %lf %lf %lf\n",Part_local0[ii].x,Part_local0[ii].y,Part_local0[ii].z,Part_local0[ii].m);
-
-		/*for(jj=istar; jj< iend; jj++)
-		  {
-		    if(jj != ii)
-		      {
-			xi = Part_local0[ii].x;
-			yi = Part_local0[ii].y;
-			zi = Part_local0[ii].z;
-			
-			xj = Part_local0[jj].x;
-			yj = Part_local0[jj].y;
-			zj = Part_local0[jj].z;
-			
-			mi = Part_local0[ii].m;
-			mj = Part_local0[jj].m;
-			
-			dist = distance(xi,yi,zi,xj,yj,zj);
-			
-			Part_local0[ii].Fx += -(G * mi *mj* (xi-xj) )/(dist*dist*dist);
-			
-			Part_local0[ii].Fy += -(G * mi *mj* (yi-yj) )/(dist*dist*dist);
-			
-			Part_local0[ii].Fz += -(G * mi *mj* (zi-zj) )/(dist*dist*dist);			  
-			
-			//fprintf(out2,"%lf %lf %lf %lf\n",dist,Part_local0[ii].Fx,Part_local0[ii].Fy,Part_local0[ii].Fz);
-			printf("%lf %lf %lf %lf\n",dist,Part_local0[ii].Fx,Part_local0[ii].Fy,Part_local0[ii].Fz);
-		      }
-		    
-		      }
-	    
-	      }
-	  }
-	  }*/
 
   MPI_Barrier(MPI_COMM_WORLD);
   err = MPI_Finalize();
